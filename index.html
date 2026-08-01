@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1B2A26">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Chill House — Time Cards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root{
+  --board:#1B2A26;
+  --board-deep:#132019;
+  --card:#F7F3E9;
+  --card-edge:#E3DCC9;
+  --ink:#1F2A24;
+  --ink-soft:#5E6B62;
+  --stamp:#B4341F;
+  --shift:#3F7A5A;
+  --line:rgba(31,42,36,.14);
+  --display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --r:4px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--board);
+  background-image:radial-gradient(circle at 20% 0%,#24352F 0%,var(--board) 45%,var(--board-deep) 100%);
+  color:var(--card);
+  font-family:var(--display);
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+  padding:20px 16px 64px;
+}
+.wrap{max-width:940px;margin:0 auto}
+
+/* ---------- masthead ---------- */
+.mast{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid rgba(247,243,233,.18)}
+.mast h1{font-size:clamp(22px,4.4vw,30px);font-weight:800;letter-spacing:-.02em;margin:0;line-height:1}
+.mast .sub{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:rgba(247,243,233,.55);margin-top:7px}
+.now{font-family:var(--mono);text-align:right;line-height:1.25}
+.now b{display:block;font-size:26px;font-weight:700;letter-spacing:-.02em}
+.now span{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:rgba(247,243,233,.5)}
+
+/* ---------- tabs ---------- */
+.tabs{display:flex;gap:6px;margin:18px 0 22px;flex-wrap:wrap}
+.tab{
+  font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+  background:transparent;color:rgba(247,243,233,.62);
+  border:1px solid rgba(247,243,233,.22);border-radius:var(--r);
+  padding:9px 15px;cursor:pointer;transition:background .15s,color .15s,border-color .15s;
+}
+.tab:hover{color:var(--card);border-color:rgba(247,243,233,.5)}
+.tab[aria-selected="true"]{background:var(--card);color:var(--ink);border-color:var(--card);font-weight:700}
+.panel[hidden]{display:none}
+
+/* ---------- time cards ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.tc{
+  position:relative;background:var(--card);color:var(--ink);border-radius:var(--r);
+  padding:16px 16px 14px 26px;text-align:left;cursor:pointer;border:0;width:100%;
+  font-family:var(--display);box-shadow:0 1px 0 var(--card-edge),0 10px 22px -14px rgba(0,0,0,.7);
+  transition:transform .12s ease,box-shadow .12s ease;
+}
+.tc::before{ /* perforated card edge */
+  content:"";position:absolute;left:9px;top:12px;bottom:12px;width:5px;
+  background-image:radial-gradient(circle,var(--card-edge) 0 2px,transparent 2.2px);
+  background-size:5px 11px;
+}
+.tc:hover{transform:translateY(-2px);box-shadow:0 1px 0 var(--card-edge),0 16px 26px -14px rgba(0,0,0,.75)}
+.tc:focus-visible{outline:3px solid #F0C64A;outline-offset:3px}
+.tc .who{font-size:19px;font-weight:700;letter-spacing:-.01em;line-height:1.15}
+.tc .role{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin-top:5px}
+.tc .state{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:14px;padding-top:11px;border-top:1px dashed var(--line)}
+.tc .state .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
+.tc .state .val{font-family:var(--mono);font-size:15px;font-weight:700}
+.tc.on .val{color:var(--shift)}
+.pip{position:absolute;top:14px;right:14px;width:9px;height:9px;border-radius:50%;background:var(--card-edge)}
+.tc.on .pip{background:var(--shift);box-shadow:0 0 0 4px rgba(63,122,90,.16)}
+.tc.on::after{ /* on-shift stamp */
+  content:"ON SHIFT";position:absolute;right:12px;bottom:10px;
+  font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.14em;
+  color:var(--shift);border:1.5px solid var(--shift);border-radius:2px;padding:2px 5px;
+  transform:rotate(-4deg);opacity:.85;
+}
+
+/* ---------- empty / notes ---------- */
+.empty{border:1px dashed rgba(247,243,233,.3);border-radius:var(--r);padding:30px 22px;text-align:center;color:rgba(247,243,233,.7)}
+.empty b{display:block;font-size:17px;margin-bottom:6px;color:var(--card)}
+.note{font-family:var(--mono);font-size:11.5px;line-height:1.65;color:rgba(247,243,233,.5);margin-top:22px}
+
+/* ---------- sheets / tables ---------- */
+.sheet{background:var(--card);color:var(--ink);border-radius:var(--r);padding:18px;box-shadow:0 10px 22px -16px rgba(0,0,0,.8)}
+.sheet + .sheet{margin-top:14px}
+.sheet h2{font-size:13px;font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 14px;font-weight:700}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:13px}
+th{text-align:left;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);font-weight:700;padding:0 8px 8px 0;border-bottom:1px solid var(--line)}
+td{padding:9px 8px 9px 0;border-bottom:1px solid var(--line);vertical-align:middle}
+td.num,th.num{text-align:right;padding-right:0}
+tr.total td{border-bottom:0;border-top:2px solid var(--ink);font-weight:700;padding-top:11px}
+.name-cell{font-family:var(--display);font-weight:700;font-size:14px}
+.late{color:var(--stamp);font-weight:700}
+.open{color:var(--shift);font-weight:700}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+/* ---------- controls ---------- */
+.row{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.btn{
+  font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;
+  border-radius:var(--r);padding:10px 14px;cursor:pointer;border:1px solid var(--ink);
+  background:var(--ink);color:var(--card);transition:opacity .15s;
+}
+.btn:hover{opacity:.85}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn.danger{background:var(--stamp);border-color:var(--stamp)}
+.btn.sm{padding:6px 10px;font-size:11px}
+.btn:focus-visible{outline:3px solid #F0C64A;outline-offset:2px}
+input,select{
+  font-family:var(--mono);font-size:13px;color:var(--ink);background:#fff;
+  border:1px solid var(--line);border-radius:var(--r);padding:9px 10px;
+}
+input:focus,select:focus{outline:2px solid var(--ink);outline-offset:-1px}
+label.f{display:flex;flex-direction:column;gap:5px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);font-weight:700}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;align-items:end}
+
+/* ---------- modal + keypad ---------- */
+.veil{position:fixed;inset:0;background:rgba(10,16,13,.72);display:flex;align-items:center;justify-content:center;padding:18px;z-index:50}
+.veil[hidden]{display:none}
+.dialog{background:var(--card);color:var(--ink);border-radius:6px;padding:22px;width:100%;max-width:340px;box-shadow:0 30px 60px -20px rgba(0,0,0,.8)}
+.dialog.wide{max-width:440px}
+.dialog h3{margin:0;font-size:21px;letter-spacing:-.01em}
+.dialog .cap{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin:6px 0 16px}
+.dots{display:flex;gap:10px;justify-content:center;margin:4px 0 16px}
+.dot{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--ink)}
+.dot.on{background:var(--ink)}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.key{
+  font-family:var(--mono);font-size:20px;font-weight:700;padding:15px 0;
+  background:#fff;border:1px solid var(--line);border-radius:var(--r);cursor:pointer;color:var(--ink);
+}
+.key:active{background:var(--card-edge)}
+.key.wide{grid-column:span 1;font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.err{color:var(--stamp);font-family:var(--mono);font-size:11.5px;text-align:center;min-height:16px;margin-top:10px}
+.stack{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+.big{
+  font-family:var(--mono);font-size:14px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  padding:16px;border-radius:var(--r);border:0;cursor:pointer;color:var(--card);background:var(--shift);
+}
+.big.out{background:var(--stamp)}
+.stamped{font-family:var(--mono);text-align:center;font-size:15px;font-weight:700;color:var(--stamp);border:2px solid var(--stamp);border-radius:3px;padding:9px;transform:rotate(-2.5deg);margin:14px 0}
+/* ---------- scanner ---------- */
+.scanbar{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.scanbtn{
+  font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  background:var(--card);color:var(--ink);border:0;border-radius:var(--r);
+  padding:14px 20px;cursor:pointer;display:flex;align-items:center;gap:10px;
+}
+.scanbtn:hover{background:#fff}
+.scanbtn:focus-visible{outline:3px solid #F0C64A;outline-offset:3px}
+.scanbtn svg{width:17px;height:17px;flex:none}
+.hint{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:rgba(247,243,233,.45)}
+.viewer{position:relative;background:#000;border-radius:6px;overflow:hidden;aspect-ratio:4/3;max-width:100%}
+.viewer video{width:100%;height:100%;object-fit:cover;display:block}
+.reticle{position:absolute;inset:14%;border-radius:8px;box-shadow:0 0 0 100vmax rgba(10,16,13,.5);pointer-events:none}
+.reticle i{position:absolute;width:26px;height:26px;border:3px solid #F0C64A}
+.reticle i:nth-child(1){top:-3px;left:-3px;border-right:0;border-bottom:0;border-radius:6px 0 0 0}
+.reticle i:nth-child(2){top:-3px;right:-3px;border-left:0;border-bottom:0;border-radius:0 6px 0 0}
+.reticle i:nth-child(3){bottom:-3px;left:-3px;border-right:0;border-top:0;border-radius:0 0 0 6px}
+.reticle i:nth-child(4){bottom:-3px;right:-3px;border-left:0;border-top:0;border-radius:0 0 6px 0}
+.scanmsg{font-family:var(--mono);font-size:12px;text-align:center;color:var(--ink-soft);margin-top:12px;min-height:17px}
+.scanmsg.bad{color:var(--stamp);font-weight:700}
+
+/* ---------- badge ---------- */
+.badge{background:#fff;border:1px solid var(--card-edge);border-radius:6px;padding:20px;text-align:center;margin:4px 0 14px}
+.badge .qr{display:flex;justify-content:center;margin-bottom:14px}
+.badge .qr img,.badge .qr canvas{display:block}
+.badge .bname{font-size:22px;font-weight:800;letter-spacing:-.01em}
+.badge .brole{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);margin-top:4px}
+.badge .bshop{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft);margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)}
+@media print{
+  body{background:#fff;padding:0}
+  .wrap,.tabs,.mast{display:none!important}
+  .veil{position:static;background:none;padding:0;display:block}
+  .dialog{box-shadow:none;max-width:none;padding:0}
+  .dialog h3,.dialog .cap,.stack,.err{display:none!important}
+  .badge{border:1px dashed #999;page-break-inside:avoid;width:62mm;margin:8mm}
+}
+/* ---------- scan station (full screen) ---------- */
+.station{position:fixed;inset:0;z-index:80;background:#000;display:flex;flex-direction:column}
+.station[hidden]{display:none}
+.station video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.st-top{position:relative;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:calc(env(safe-area-inset-top) + 12px) 14px 12px;background:linear-gradient(rgba(10,16,13,.85),transparent)}
+.st-top .shop{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:rgba(247,243,233,.8)}
+.st-icon{background:rgba(10,16,13,.55);border:1px solid rgba(247,243,233,.3);color:var(--card);border-radius:var(--r);font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;padding:9px 12px;cursor:pointer}
+.st-icon[aria-pressed="true"]{background:#F0C64A;color:#1B2A26;border-color:#F0C64A}
+.st-mid{position:relative;z-index:2;flex:1;display:flex;align-items:center;justify-content:center;padding:10px}
+.frame{position:relative;width:min(74vw,74vh,320px);aspect-ratio:1;border-radius:14px;box-shadow:0 0 0 100vmax rgba(10,16,13,.55)}
+.frame i{position:absolute;width:34px;height:34px;border:4px solid #F0C64A}
+.frame i:nth-child(1){top:-4px;left:-4px;border-right:0;border-bottom:0;border-radius:14px 0 0 0}
+.frame i:nth-child(2){top:-4px;right:-4px;border-left:0;border-bottom:0;border-radius:0 14px 0 0}
+.frame i:nth-child(3){bottom:-4px;left:-4px;border-right:0;border-top:0;border-radius:0 0 0 14px}
+.frame i:nth-child(4){bottom:-4px;right:-4px;border-left:0;border-top:0;border-radius:0 0 14px 0}
+.st-bot{position:relative;z-index:3;text-align:center;padding:16px 16px calc(env(safe-area-inset-bottom) + 20px);background:linear-gradient(transparent,rgba(10,16,13,.9) 40%)}
+.st-bot .say{font-family:var(--mono);font-size:13px;letter-spacing:.08em;color:rgba(247,243,233,.8)}
+.st-bot .clock{font-family:var(--mono);font-size:32px;font-weight:700;letter-spacing:-.02em;color:var(--card);margin-bottom:4px}
+.st-bot .manual{margin-top:14px;background:transparent;border:1px solid rgba(247,243,233,.35);color:var(--card);border-radius:var(--r);font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:11px 16px;cursor:pointer}
+
+/* result flash */
+.flash{position:absolute;inset:0;z-index:9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:24px;text-align:center;color:#fff}
+.flash[hidden]{display:none}
+.flash.in{background:rgba(31,92,63,.95)}
+.flash.out{background:rgba(28,44,66,.95)}
+.flash.warn{background:rgba(150,42,25,.95)}
+.flash .verb{font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;opacity:.85}
+.flash .nm{font-size:clamp(30px,9vw,46px);font-weight:800;letter-spacing:-.02em;line-height:1.05}
+.flash .at{font-family:var(--mono);font-size:26px;font-weight:700;margin-top:6px}
+.flash .sub{font-family:var(--mono);font-size:12.5px;opacity:.85;margin-top:8px;letter-spacing:.06em}
+.tick{width:56px;height:56px;border-radius:50%;border:3px solid rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;margin-bottom:10px}
+.tick svg{width:28px;height:28px}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media (max-width:520px){
+  body{padding:16px 12px 56px}
+  .now b{font-size:21px}
+  .grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="mast">
+    <div>
+      <h1 id="shopName">Chill House</h1>
+      <div class="sub">Staff time cards</div>
+    </div>
+    <div class="now"><b id="clockNow">--:--</b><span id="clockDate"></span></div>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-tab="clock">Clock</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="sheet">Timesheet</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="manage">Manage</button>
+  </div>
+
+  <!-- CLOCK -->
+  <section class="panel" id="panel-clock">
+    <div class="scanbar">
+      <button class="scanbtn" id="btnScan">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3M3 12h18"/></svg>
+        Open scan station
+      </button>
+      <span class="hint" id="scanHint">or tap a name below to use a PIN</span>
+    </div>
+    <div class="grid" id="cardGrid"></div>
+    <p class="note">Records are saved on this device only. Export a backup from Manage before clearing browser data.</p>
+  </section>
+
+  <!-- TIMESHEET -->
+  <section class="panel" id="panel-sheet" hidden>
+    <div class="sheet">
+      <div class="row">
+        <label class="f">Month<input type="month" id="monthPick"></label>
+        <label class="f">Staff
+          <select id="staffFilter"><option value="">Everyone</option></select>
+        </label>
+        <button class="btn ghost sm" id="btnCsv" style="margin-top:18px">Download CSV</button>
+      </div>
+      <h2>Hours by person</h2>
+      <div class="scroll"><table id="totalsTable"></table></div>
+    </div>
+    <div class="sheet">
+      <h2>Every shift</h2>
+      <div class="scroll"><table id="entryTable"></table></div>
+    </div>
+  </section>
+
+  <!-- MANAGE -->
+  <section class="panel" id="panel-manage" hidden>
+    <div class="sheet">
+      <h2>Add someone</h2>
+      <div class="fields">
+        <label class="f">Name<input id="newName" placeholder="Sokha"></label>
+        <label class="f">Role<input id="newRole" placeholder="Barista"></label>
+        <label class="f">4-digit PIN<input id="newPin" inputmode="numeric" maxlength="4" placeholder="0000"></label>
+        <label class="f">Shift starts<input type="time" id="newStart" value="07:00"></label>
+        <button class="btn" id="btnAdd">Add to board</button>
+      </div>
+    </div>
+    <div class="sheet">
+      <h2>The team</h2>
+      <div class="scroll"><table id="staffTable"></table></div>
+    </div>
+    <div class="sheet">
+      <h2>Settings &amp; backup</h2>
+      <div class="fields" style="margin-bottom:14px">
+        <label class="f">Shop name<input id="setShop"></label>
+        <label class="f">Manager PIN<input id="setMgr" inputmode="numeric" maxlength="4"></label>
+        <label class="f">Late after (min)<input id="setGrace" inputmode="numeric" maxlength="3"></label>
+        <button class="btn" id="btnSave">Save settings</button>
+      </div>
+      <div class="row" style="margin:0">
+        <button class="btn ghost sm" id="btnExport">Export JSON</button>
+        <button class="btn ghost sm" id="btnImport">Import JSON</button>
+        <input type="file" id="fileIn" accept="application/json" hidden>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- Full-screen scan station -->
+<div class="station" id="station" hidden>
+  <video id="stCam" playsinline muted></video>
+  <div class="st-top">
+    <span class="shop" id="stShop">Chill House</span>
+    <span style="display:flex;gap:8px">
+      <button class="st-icon" id="stTorch" aria-pressed="false" hidden>Light</button>
+      <button class="st-icon" id="stExit">Exit</button>
+    </span>
+  </div>
+  <div class="st-mid"><div class="frame"><i></i><i></i><i></i><i></i></div></div>
+  <div class="st-bot">
+    <div class="clock" id="stClock">--:--</div>
+    <div class="say" id="stSay">Hold your badge in the frame</div>
+    <button class="manual" id="stManual">Enter PIN instead</button>
+  </div>
+  <div class="flash" id="stFlash" hidden></div>
+</div>
+
+<!-- PIN + punch dialog -->
+<div class="veil" id="veil" hidden>
+  <div class="dialog" id="dialog" role="dialog" aria-modal="true"></div>
+</div>
+
+<script>
+"use strict";
+const KEY="chillhouse_attendance_v1";
+const pad2=n=>String(n).padStart(2,"0");
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+let db=load();
+migrateBadges();
+function makeBadge(){return "CHS-"+Math.random().toString(36).slice(2,8).toUpperCase()+Math.random().toString(36).slice(2,6).toUpperCase();}
+function migrateBadges(){
+  let touched=false;
+  db.staff.forEach(p=>{if(!p.badge){p.badge=makeBadge();touched=true;}});
+  if(touched)save();
+}
+function load(){
+  try{
+    const raw=localStorage.getItem(KEY);
+    if(raw){const d=JSON.parse(raw); d.staff??=[]; d.entries??=[]; d.settings??={}; return d;}
+  }catch(e){console.warn("Could not read saved data",e);}
+  return {staff:[],entries:[],settings:{shop:"Chill House",managerPin:"1234",grace:5}};
+}
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(db));}
+  catch(e){alert("This device blocked saving. Records from this session will be lost when the page closes.");}
+}
+
+/* ---------- time helpers ---------- */
+const fmtTime=d=>pad2(d.getHours())+":"+pad2(d.getMinutes());
+const fmtDay=d=>d.toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"});
+const dayKey=d=>d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());
+const monthKey=d=>d.getFullYear()+"-"+pad2(d.getMonth()+1);
+function hoursBetween(a,b){return (b-a)/3600000;}
+function fmtDur(h){const m=Math.round(h*60);return Math.floor(m/60)+"h "+pad2(m%60)+"m";}
+function openEntry(staffId){return db.entries.find(e=>e.staffId===staffId&&!e.out);}
+function lateBy(entry,person){
+  if(!person.start)return 0;
+  const t=new Date(entry.in),[h,m]=person.start.split(":").map(Number);
+  const due=new Date(t); due.setHours(h,m,0,0);
+  return Math.max(0,Math.round((t-due)/60000));
+}
+
+/* ---------- masthead clock ---------- */
+function tickClock(){
+  const n=new Date();
+  document.getElementById("clockNow").textContent=fmtTime(n);
+  document.getElementById("clockDate").textContent=fmtDay(n);
+}
+setInterval(tickClock,10000); tickClock();
+
+/* ---------- tabs ---------- */
+document.querySelectorAll(".tab").forEach(t=>{
+  t.addEventListener("click",()=>{
+    document.querySelectorAll(".tab").forEach(x=>x.setAttribute("aria-selected",String(x===t)));
+    ["clock","sheet","manage"].forEach(p=>{
+      document.getElementById("panel-"+p).hidden = (p!==t.dataset.tab);
+    });
+    if(t.dataset.tab==="sheet")renderSheet();
+    if(t.dataset.tab==="manage")requireManager(renderManage);
+  });
+});
+
+/* ---------- clock board ---------- */
+function renderBoard(){
+  const grid=document.getElementById("cardGrid");
+  document.getElementById("shopName").textContent=db.settings.shop||"Chill House";
+  grid.innerHTML="";
+  if(!db.staff.length){
+    grid.innerHTML='<div class="empty"><b>No one on the board yet</b>Open Manage to add your first staff member.</div>';
+    return;
+  }
+  db.staff.forEach(p=>{
+    const on=openEntry(p.id);
+    const b=document.createElement("button");
+    b.className="tc"+(on?" on":"");
+    b.innerHTML=`<span class="pip"></span>
+      <div class="who"></div>
+      <div class="role"></div>
+      <div class="state">
+        <span class="lbl">${on?"Since":"Status"}</span>
+        <span class="val">${on?fmtTime(new Date(on.in))+" · "+fmtDur(hoursBetween(new Date(on.in),new Date())):"Off"}</span>
+      </div>`;
+    b.querySelector(".who").textContent=p.name;
+    b.querySelector(".role").textContent=p.role||"Staff";
+    b.addEventListener("click",()=>askPin(p));
+    grid.appendChild(b);
+  });
+}
+setInterval(()=>{if(!document.getElementById("panel-clock").hidden)renderBoard();},60000);
+
+/* ---------- dialogs ---------- */
+const veil=document.getElementById("veil"), dialog=document.getElementById("dialog");
+function closeDialog(){veil.hidden=true;dialog.innerHTML="";dialog.className="dialog";}
+veil.addEventListener("click",e=>{if(e.target===veil)closeDialog();});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!veil.hidden)closeDialog();});
+
+function keypad({title,caption,onDone,onCancel}){
+  veil.hidden=false;
+  dialog.innerHTML=`<h3></h3><div class="cap"></div>
+    <div class="dots">${"<span class='dot'></span>".repeat(4)}</div>
+    <div class="pad">
+      ${[1,2,3,4,5,6,7,8,9].map(n=>`<button class="key" data-k="${n}">${n}</button>`).join("")}
+      <button class="key wide" data-k="del">Back</button>
+      <button class="key" data-k="0">0</button>
+      <button class="key wide" data-k="esc">Cancel</button>
+    </div>
+    <div class="err"></div>`;
+  dialog.querySelector("h3").textContent=title;
+  dialog.querySelector(".cap").textContent=caption;
+  let buf="";
+  const dots=dialog.querySelectorAll(".dot"), err=dialog.querySelector(".err");
+  const paint=()=>dots.forEach((d,i)=>d.classList.toggle("on",i<buf.length));
+  const press=k=>{
+    if(k==="esc"){closeDialog();onCancel&&onCancel();return;}
+    if(k==="del"){buf=buf.slice(0,-1);err.textContent="";paint();return;}
+    if(buf.length<4){buf+=k;paint();}
+    if(buf.length===4){
+      const v=buf;
+      setTimeout(()=>{
+        const ok=onDone(v);
+        if(ok===false){buf="";paint();err.textContent="Wrong PIN — try again";}
+      },110);
+    }
+  };
+  dialog.querySelectorAll(".key").forEach(b=>b.addEventListener("click",()=>press(b.dataset.k)));
+  const kb=e=>{
+    if(veil.hidden){document.removeEventListener("keydown",kb);return;}
+    if(/^[0-9]$/.test(e.key))press(e.key);
+    else if(e.key==="Backspace")press("del");
+  };
+  document.addEventListener("keydown",kb);
+  dialog.querySelector(".key").focus();
+}
+
+function askPin(person){
+  keypad({
+    title:person.name,
+    caption:"Enter your PIN",
+    onDone:v=>{ if(v!==person.pin)return false; punchScreen(person); }
+  });
+}
+
+function punchScreen(person){
+  const on=openEntry(person.id);
+  const now=new Date();
+  veil.hidden=false; dialog.className="dialog";
+  dialog.innerHTML=`<h3></h3><div class="cap"></div>
+    <div class="stamped"></div>
+    <div class="stack">
+      <button class="big ${on?"out":""}" id="doPunch">${on?"Clock out":"Clock in"}</button>
+      <button class="btn ghost" id="cancelPunch">Not now</button>
+    </div>`;
+  dialog.querySelector("h3").textContent=person.name;
+  dialog.querySelector(".cap").textContent=on
+    ? "On shift since "+fmtTime(new Date(on.in))+" · "+fmtDur(hoursBetween(new Date(on.in),now))
+    : "Not clocked in";
+  dialog.querySelector(".stamped").textContent=fmtDay(now).toUpperCase()+"  "+fmtTime(now);
+  dialog.querySelector("#cancelPunch").addEventListener("click",closeDialog);
+  dialog.querySelector("#doPunch").addEventListener("click",()=>{
+    const t=new Date().toISOString();
+    if(on){on.out=t;} else {db.entries.push({id:uid(),staffId:person.id,in:t,out:null});}
+    save(); closeDialog(); renderBoard();
+  });
+  dialog.querySelector("#doPunch").focus();
+}
+
+/* ---------- scan station ---------- */
+const station=document.getElementById("station");
+const stCam=document.getElementById("stCam"), stSay=document.getElementById("stSay"),
+      stFlash=document.getElementById("stFlash"), stTorch=document.getElementById("stTorch");
+let camStream=null, scanLoop=null, wakeLock=null, holdUntil=0, lastHit={code:"",at:0};
+
+function stopCamera(){
+  if(scanLoop){cancelAnimationFrame(scanLoop);scanLoop=null;}
+  if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}
+  if(wakeLock){wakeLock.release().catch(()=>{});wakeLock=null;}
+}
+
+document.getElementById("btnScan").addEventListener("click",openStation);
+document.getElementById("stExit").addEventListener("click",closeStation);
+document.getElementById("stManual").addEventListener("click",()=>{closeStation();});
+stTorch.addEventListener("click",toggleTorch);
+
+function closeStation(){
+  stopCamera();
+  station.hidden=true;
+  stFlash.hidden=true;
+  renderBoard();
+}
+
+async function openStation(){
+  if(!db.staff.length){alert("Add staff in the Manage tab first — each person gets a badge there.");return;}
+  if(typeof jsQR!=="function"){alert("The scanner didn't load. Connect to the internet once and reload the page.");return;}
+  if(!navigator.mediaDevices?.getUserMedia){
+    alert("This browser won't open the camera.\n\nAndroid only allows camera access on https:// pages. Host the file (GitHub Pages works) and open that link instead of the file itself.");
+    return;
+  }
+  document.getElementById("stShop").textContent=db.settings.shop||"Chill House";
+  station.hidden=false; stFlash.hidden=true;
+  stSay.textContent="Starting camera…";
+  stTick();
+
+  try{
+    camStream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false
+    });
+  }catch(err){
+    stSay.textContent = err.name==="NotAllowedError"
+      ? "Camera blocked — allow it in Chrome's site settings"
+      : "No camera found on this phone";
+    return;
+  }
+  stCam.srcObject=camStream;
+  await stCam.play().catch(()=>{});
+  stSay.textContent="Hold your badge in the frame";
+
+  try{
+    const cap=camStream.getVideoTracks()[0].getCapabilities?.();
+    if(cap&&cap.torch)stTorch.hidden=false;
+  }catch(e){}
+  try{ if("wakeLock" in navigator) wakeLock=await navigator.wakeLock.request("screen"); }catch(e){}
+
+  const cv=document.createElement("canvas"), ctx=cv.getContext("2d",{willReadFrequently:true});
+  const tick=()=>{
+    if(!camStream)return;
+    if(stCam.readyState===stCam.HAVE_ENOUGH_DATA && Date.now()>holdUntil){
+      const w=stCam.videoWidth,h=stCam.videoHeight;
+      if(w&&h){
+        const side=Math.floor(Math.min(w,h)*0.8), sx=Math.floor((w-side)/2), sy=Math.floor((h-side)/2);
+        cv.width=side;cv.height=side;
+        ctx.drawImage(stCam,sx,sy,side,side,0,0,side,side);
+        const img=ctx.getImageData(0,0,side,side);
+        const hit=jsQR(img.data,img.width,img.height,{inversionAttempts:"dontInvert"});
+        if(hit&&hit.data)handleScan(hit.data.trim());
+      }
+    }
+    scanLoop=requestAnimationFrame(tick);
+  };
+  scanLoop=requestAnimationFrame(tick);
+}
+
+async function toggleTorch(){
+  if(!camStream)return;
+  const track=camStream.getVideoTracks()[0];
+  const on=stTorch.getAttribute("aria-pressed")==="true";
+  try{
+    await track.applyConstraints({advanced:[{torch:!on}]});
+    stTorch.setAttribute("aria-pressed",String(!on));
+  }catch(e){stTorch.hidden=true;}
+}
+
+/* feedback */
+function buzz(ms){try{navigator.vibrate&&navigator.vibrate(ms);}catch(e){}}
+let audioCtx=null;
+function beep(freq,ms){
+  try{
+    audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==="suspended")audioCtx.resume();
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.frequency.value=freq;o.type="sine";
+    g.gain.setValueAtTime(.0001,audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.25,audioCtx.currentTime+.01);
+    g.gain.exponentialRampToValueAtTime(.0001,audioCtx.currentTime+ms/1000);
+    o.connect(g).connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+ms/1000);
+  }catch(e){}
+}
+
+const CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+
+function flash(kind,verb,name,at,sub){
+  stFlash.className="flash "+kind;
+  stFlash.innerHTML=`<div class="tick">${kind==="warn"?"":CHECK}</div>
+    <div class="verb"></div><div class="nm"></div>
+    ${at?'<div class="at"></div>':""}
+    ${sub?'<div class="sub"></div>':""}`;
+  stFlash.querySelector(".verb").textContent=verb;
+  stFlash.querySelector(".nm").textContent=name;
+  if(at)stFlash.querySelector(".at").textContent=at;
+  if(sub)stFlash.querySelector(".sub").textContent=sub;
+  stFlash.hidden=false;
+  holdUntil=Date.now()+2600;
+  setTimeout(()=>{stFlash.hidden=true;stSay.textContent="Hold your badge in the frame";},2600);
+}
+
+function handleScan(code){
+  const now=Date.now();
+  if(code===lastHit.code && now-lastHit.at<8000){holdUntil=now+800;return;}
+  lastHit={code,at:now};
+
+  const person=db.staff.find(p=>p.badge===code);
+  if(!person){buzz([60,60,60]);beep(220,240);flash("warn","Not recognised","Unknown badge","","Ask the manager for a new one");return;}
+
+  const open=openEntry(person.id), t=new Date();
+
+  if(open && (t-new Date(open.in))<60000){
+    buzz(60);beep(330,160);
+    flash("warn","Already in",person.name,fmtTime(new Date(open.in)),"Scan again when your shift ends");
+    return;
+  }
+
+  if(open){
+    open.out=t.toISOString(); save();
+    buzz([40,50,40]);beep(520,120);setTimeout(()=>beep(392,180),130);
+    flash("out","Clocked out",person.name,fmtTime(t),"Shift total "+fmtDur(hoursBetween(new Date(open.in),t)));
+  }else{
+    db.entries.push({id:uid(),staffId:person.id,in:t.toISOString(),out:null}); save();
+    buzz(70);beep(660,140);
+    const late=lateBy({in:t.toISOString()},person);
+    flash("in","Clocked in",person.name,fmtTime(t),
+      late>(+db.settings.grace||0) ? late+" minutes late" : "Have a good shift");
+  }
+}
+
+function stTick(){document.getElementById("stClock").textContent=fmtTime(new Date());}
+setInterval(stTick,10000);
+
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden && !station.hidden) stopCamera();
+});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!station.hidden)closeStation();});
+
+/* ---------- printable badge ---------- */
+function showBadge(id){
+  const p=db.staff.find(s=>s.id===id); if(!p)return;
+  veil.hidden=false; dialog.className="dialog";
+  dialog.innerHTML=`<h3></h3><div class="cap">Badge — print or save it</div>
+    <div class="badge">
+      <div class="qr" id="qrBox"></div>
+      <div class="bname"></div>
+      <div class="brole"></div>
+      <div class="bshop"></div>
+    </div>
+    <div class="stack">
+      <button class="btn" id="badgePrint">Print badge</button>
+      <button class="btn ghost" id="badgeNew">Issue a new code</button>
+      <button class="btn ghost" id="badgeClose">Close</button>
+    </div>`;
+  dialog.querySelector("h3").textContent=p.name;
+  dialog.querySelector(".bname").textContent=p.name;
+  dialog.querySelector(".brole").textContent=p.role||"Staff";
+  dialog.querySelector(".bshop").textContent=db.settings.shop||"Chill House";
+  if(typeof QRCode==="function"){
+    new QRCode(dialog.querySelector("#qrBox"),{text:p.badge,width:180,height:180,correctLevel:QRCode.CorrectLevel.M});
+  }else{
+    dialog.querySelector("#qrBox").textContent="QR library didn't load — reconnect and reload.";
+  }
+  dialog.querySelector("#badgeClose").addEventListener("click",closeDialog);
+  dialog.querySelector("#badgePrint").addEventListener("click",()=>window.print());
+  dialog.querySelector("#badgeNew").addEventListener("click",()=>{
+    if(!confirm("Issue a new code for "+p.name+"? Their old badge stops working."))return;
+    p.badge=makeBadge();save();showBadge(id);
+  });
+}
+
+/* ---------- manager gate ---------- */
+let mgrUntil=0;
+function requireManager(then){
+  if(Date.now()<mgrUntil){then();return;}
+  keypad({
+    title:"Manager only",
+    caption:"Enter the manager PIN",
+    onDone:v=>{
+      if(v!==(db.settings.managerPin||"1234"))return false;
+      mgrUntil=Date.now()+10*60000; closeDialog(); then();
+    },
+    onCancel:()=>document.querySelector('.tab[data-tab="clock"]').click()
+  });
+}
+
+/* ---------- timesheet ---------- */
+const monthPick=document.getElementById("monthPick");
+monthPick.value=monthKey(new Date());
+monthPick.addEventListener("change",renderSheet);
+document.getElementById("staffFilter").addEventListener("change",renderSheet);
+
+function sheetRows(){
+  const m=monthPick.value, f=document.getElementById("staffFilter").value;
+  return db.entries
+    .filter(e=>monthKey(new Date(e.in))===m)
+    .filter(e=>!f||e.staffId===f)
+    .sort((a,b)=>new Date(b.in)-new Date(a.in));
+}
+function renderSheet(){
+  const sel=document.getElementById("staffFilter"), keep=sel.value;
+  sel.innerHTML='<option value="">Everyone</option>'+db.staff.map(p=>`<option value="${p.id}">${p.name}</option>`).join("");
+  sel.value=keep;
+
+  const rows=sheetRows(), totals={};
+  rows.forEach(e=>{
+    const t=totals[e.staffId]??={h:0,shifts:0,late:0,open:0};
+    t.shifts++;
+    if(e.out)t.h+=hoursBetween(new Date(e.in),new Date(e.out)); else t.open++;
+    const p=db.staff.find(s=>s.id===e.staffId);
+    if(p&&lateBy(e,p)>(+db.settings.grace||0))t.late++;
+  });
+
+  const tt=document.getElementById("totalsTable");
+  const ids=Object.keys(totals);
+  if(!ids.length){
+    tt.innerHTML='<tr><td style="color:var(--ink-soft)">No shifts recorded this month.</td></tr>';
+  }else{
+    let grand=0;
+    tt.innerHTML="<tr><th>Name</th><th class='num'>Shifts</th><th class='num'>Late</th><th class='num'>Hours</th></tr>"+
+      ids.map(id=>{
+        const p=db.staff.find(s=>s.id===id)||{name:"(removed)"},t=totals[id];grand+=t.h;
+        return `<tr><td class="name-cell">${esc(p.name)}${t.open?' <span class="open">· on shift</span>':""}</td>
+          <td class="num">${t.shifts}</td>
+          <td class="num ${t.late?"late":""}">${t.late||"—"}</td>
+          <td class="num">${t.h.toFixed(2)}</td></tr>`;
+      }).join("")+
+      `<tr class="total"><td>Total</td><td class="num"></td><td class="num"></td><td class="num">${grand.toFixed(2)}</td></tr>`;
+  }
+
+  const et=document.getElementById("entryTable");
+  if(!rows.length){et.innerHTML='<tr><td style="color:var(--ink-soft)">Nothing here yet.</td></tr>';return;}
+  et.innerHTML="<tr><th>Date</th><th>Name</th><th>In</th><th>Out</th><th class='num'>Hours</th><th></th></tr>"+
+    rows.map(e=>{
+      const p=db.staff.find(s=>s.id===e.staffId)||{name:"(removed)"};
+      const din=new Date(e.in), late=p.start?lateBy(e,p):0;
+      const h=e.out?hoursBetween(din,new Date(e.out)).toFixed(2):"—";
+      return `<tr><td>${dayKey(din).slice(5)}</td>
+        <td class="name-cell">${esc(p.name)}</td>
+        <td class="${late>(+db.settings.grace||0)?"late":""}">${fmtTime(din)}${late>(+db.settings.grace||0)?" +"+late:""}</td>
+        <td class="${e.out?"":"open"}">${e.out?fmtTime(new Date(e.out)):"open"}</td>
+        <td class="num">${h}</td>
+        <td class="num"><button class="btn ghost sm" data-fix="${e.id}">Fix</button></td></tr>`;
+    }).join("");
+  et.querySelectorAll("[data-fix]").forEach(b=>b.addEventListener("click",()=>requireManager(()=>editEntry(b.dataset.fix))));
+}
+
+function editEntry(id){
+  const e=db.entries.find(x=>x.id===id); if(!e)return;
+  const p=db.staff.find(s=>s.id===e.staffId)||{name:"Staff"};
+  const din=new Date(e.in), dout=e.out?new Date(e.out):null;
+  const localVal=d=>d?`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`:"";
+  veil.hidden=false; dialog.className="dialog wide";
+  dialog.innerHTML=`<h3></h3><div class="cap">Correct a shift</div>
+    <div class="fields">
+      <label class="f">Clocked in<input type="datetime-local" id="fixIn" value="${localVal(din)}"></label>
+      <label class="f">Clocked out<input type="datetime-local" id="fixOut" value="${localVal(dout)}"></label>
+    </div>
+    <div class="stack">
+      <button class="btn" id="fixSave">Save shift</button>
+      <button class="btn danger" id="fixDel">Delete shift</button>
+      <button class="btn ghost" id="fixCancel">Cancel</button>
+    </div>`;
+  dialog.querySelector("h3").textContent=p.name;
+  dialog.querySelector("#fixCancel").addEventListener("click",closeDialog);
+  dialog.querySelector("#fixSave").addEventListener("click",()=>{
+    const i=dialog.querySelector("#fixIn").value,o=dialog.querySelector("#fixOut").value;
+    if(!i){alert("A shift needs a clock-in time.");return;}
+    if(o&&new Date(o)<=new Date(i)){alert("Clock-out must come after clock-in.");return;}
+    e.in=new Date(i).toISOString(); e.out=o?new Date(o).toISOString():null;
+    save();closeDialog();renderSheet();renderBoard();
+  });
+  dialog.querySelector("#fixDel").addEventListener("click",()=>{
+    if(!confirm("Delete this shift for good?"))return;
+    db.entries=db.entries.filter(x=>x.id!==id);
+    save();closeDialog();renderSheet();renderBoard();
+  });
+}
+
+/* ---------- manage ---------- */
+function renderManage(){
+  document.getElementById("setShop").value=db.settings.shop||"Chill House";
+  document.getElementById("setMgr").value=db.settings.managerPin||"1234";
+  document.getElementById("setGrace").value=db.settings.grace??5;
+  const t=document.getElementById("staffTable");
+  if(!db.staff.length){t.innerHTML='<tr><td style="color:var(--ink-soft)">Nobody added yet.</td></tr>';return;}
+  t.innerHTML="<tr><th>Name</th><th>Role</th><th>Starts</th><th>PIN</th><th class='num'>Badge / remove</th></tr>"+
+    db.staff.map(p=>`<tr>
+      <td class="name-cell">${esc(p.name)}</td>
+      <td>${esc(p.role||"—")}</td>
+      <td>${p.start||"—"}</td>
+      <td>${p.pin}</td>
+      <td class="num"><button class="btn ghost sm" data-badge="${p.id}">Badge</button>
+        <button class="btn ghost sm" data-del="${p.id}">Remove</button></td></tr>`).join("");
+  t.querySelectorAll("[data-badge]").forEach(b=>b.addEventListener("click",()=>showBadge(b.dataset.badge)));
+  t.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>{
+    const p=db.staff.find(s=>s.id===b.dataset.del);
+    if(!confirm("Remove "+p.name+"? Past shifts stay in the timesheet."))return;
+    db.staff=db.staff.filter(s=>s.id!==b.dataset.del);save();renderManage();renderBoard();
+  }));
+}
+document.getElementById("btnAdd").addEventListener("click",()=>{
+  const name=document.getElementById("newName").value.trim();
+  const pin=document.getElementById("newPin").value.trim();
+  if(!name){alert("Add a name first.");return;}
+  if(!/^\d{4}$/.test(pin)){alert("PIN must be exactly 4 digits.");return;}
+  db.staff.push({id:uid(),name,role:document.getElementById("newRole").value.trim(),pin,start:document.getElementById("newStart").value,badge:makeBadge()});
+  save();
+  ["newName","newRole","newPin"].forEach(i=>document.getElementById(i).value="");
+  renderManage();renderBoard();
+});
+document.getElementById("btnSave").addEventListener("click",()=>{
+  const mgr=document.getElementById("setMgr").value.trim();
+  if(!/^\d{4}$/.test(mgr)){alert("Manager PIN must be exactly 4 digits.");return;}
+  db.settings.shop=document.getElementById("setShop").value.trim()||"Chill House";
+  db.settings.managerPin=mgr;
+  db.settings.grace=+document.getElementById("setGrace").value||0;
+  save();renderBoard();alert("Settings saved.");
+});
+
+/* ---------- export / import ---------- */
+function download(name,text,type){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([text],{type}));
+  a.download=name;a.click();URL.revokeObjectURL(a.href);
+}
+document.getElementById("btnExport").addEventListener("click",()=>
+  download("chillhouse-attendance-"+dayKey(new Date())+".json",JSON.stringify(db,null,2),"application/json"));
+document.getElementById("btnImport").addEventListener("click",()=>document.getElementById("fileIn").click());
+document.getElementById("fileIn").addEventListener("change",ev=>{
+  const f=ev.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const d=JSON.parse(r.result);
+      if(!Array.isArray(d.staff)||!Array.isArray(d.entries))throw 0;
+      if(!confirm("Replace everything on this device with the file's records?"))return;
+      db=d;save();renderManage();renderBoard();renderSheet();
+    }catch(e){alert("That file isn't a valid attendance backup.");}
+  };
+  r.readAsText(f);ev.target.value="";
+});
+document.getElementById("btnCsv").addEventListener("click",()=>{
+  const rows=sheetRows();
+  if(!rows.length){alert("No shifts in this month to export.");return;}
+  const lines=[["date","name","clock_in","clock_out","hours","late_minutes"].join(",")];
+  rows.slice().reverse().forEach(e=>{
+    const p=db.staff.find(s=>s.id===e.staffId)||{name:"(removed)"};
+    const din=new Date(e.in);
+    lines.push([dayKey(din),`"${p.name.replace(/"/g,'""')}"`,fmtTime(din),
+      e.out?fmtTime(new Date(e.out)):"",
+      e.out?hoursBetween(din,new Date(e.out)).toFixed(2):"",
+      p.start?lateBy(e,p):0].join(","));
+  });
+  download("attendance-"+monthPick.value+".csv",lines.join("\n"),"text/csv");
+});
+
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+renderBoard();
+</script>
+</body>
+</html>
